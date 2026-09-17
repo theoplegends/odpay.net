@@ -1,0 +1,13 @@
+# https://zenith.hosting/developers
+
+x-zenith:
+  catalog:
+    name: odpay.net
+  expose:
+    - service: web
+      port: 80
+      web: true
+
+services:
+  web:
+    image: ghcr.io/theoplegends/odpay.net@sha256:329a3692fdec3f6b610ffca55a5fd92de21e59f1af1f5605dc17497387cf0b32
