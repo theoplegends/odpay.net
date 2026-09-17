@@ -15,6 +15,10 @@ files under `.well-known/matrix/`. There is no database, queue, or worker.
   Cloudflare Pages `_headers` file (nginx does not read that file natively),
   and serves `/.well-known/matrix/*` as `application/json`.
 - **Internal port**: `80` (plain HTTP; Zenith terminates TLS in front of it).
+  IPv4 only: because `nginx.conf` replaces the stock `default.conf`, the
+  image entrypoint skips the `listen [::]:80` line it adds to the packaged
+  config, and hardcoding one would break startup on hosts without IPv6.
+  Anything probing the container must use `127.0.0.1`, not `localhost`.
 - **Platform**: `linux/amd64` only, built and verified in CI. Local ARM
   clusters are a separate development concern.
 - **Persistent storage**: none. Content is baked into the image at build time.
