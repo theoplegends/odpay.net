@@ -1,0 +1,12 @@
+.git
+.github
+.agents
+.claude
+docs
+scripts
+zenith-compose.yml
+zenith-image-update
+README.md
+AGENTS.md
+CLAUDE.md
+skills-lock.json

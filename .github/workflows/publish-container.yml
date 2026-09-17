@@ -1,0 +1,88 @@
+name: Publish container image
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+    tags: ["v*"]
+    paths:
+      - 'index.html'
+      - 'pgp.txt'
+      - '88x31.gif'
+      - '88x31_static.gif'
+      - '_headers'
+      - 'files/**'
+      - '.well-known/**'
+      - 'Dockerfile'
+      - 'nginx.conf'
+      - '.dockerignore'
+      - 'scripts/zenith-smoke.sh'
+      - 'scripts/zenith-check-image.py'
+      - 'scripts/zenith-prepare-image-update.sh'
+      - '.github/workflows/publish-container.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build AMD64 image
+        run: docker build --platform linux/amd64 -t zenith-smoke .
+      - name: Boot and check app
+        run: bash scripts/zenith-smoke.sh zenith-smoke
+      - name: Validate existing Compose
+        run: |
+          if test -f zenith-compose.yml; then
+            docker compose -f zenith-compose.yml config --quiet
+          fi
+
+  publish:
+    needs: validate
+    if: >-
+      github.event_name != 'pull_request' &&
+      (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) ||
+       startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: type=sha,format=long
+      - uses: docker/build-push-action@v7
+        id: image
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+      - name: Verify public image and prepare update
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: bash scripts/zenith-prepare-image-update.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: zenith-image-${{ github.sha }}
+          path: zenith-image-update/
+          if-no-files-found: error
