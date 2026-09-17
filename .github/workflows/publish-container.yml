@@ -5,6 +5,12 @@ on:
   push:
     branches: [master]
     tags: ["v*"]
+    # The Dockerfile build context and nothing else. scripts/, docs/, .github/
+    # and zenith-compose.yml are all in .dockerignore, so changing them cannot
+    # change the image -- republishing on those would hand the manifest a
+    # freshly stale digest and start an update loop. Every PR still runs
+    # `validate` unfiltered, and workflow_dispatch forces a rebuild when one is
+    # genuinely wanted.
     paths:
       - 'index.html'
       - 'pgp.txt'
@@ -16,10 +22,6 @@ on:
       - 'Dockerfile'
       - 'nginx.conf'
       - '.dockerignore'
-      - 'scripts/zenith-smoke.sh'
-      - 'scripts/zenith-check-image.py'
-      - 'scripts/zenith-prepare-image-update.sh'
-      - '.github/workflows/publish-container.yml'
   workflow_dispatch:
 
 permissions:
@@ -32,14 +34,19 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+      - run: python -m pip install --quiet --disable-pip-version-check pyyaml
       - name: Build AMD64 image
         run: docker build --platform linux/amd64 -t zenith-smoke .
       - name: Boot and check app
         run: bash scripts/zenith-smoke.sh zenith-smoke
-      - name: Validate existing Compose
+      - name: Validate Zenith Compose
         run: |
           if test -f zenith-compose.yml; then
             docker compose -f zenith-compose.yml config --quiet
+            python3 scripts/zenith-check-compose.py zenith-compose.yml
           fi
 
   publish:
@@ -56,6 +63,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+      - run: python -m pip install --quiet --disable-pip-version-check pyyaml
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
